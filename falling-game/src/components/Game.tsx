@@ -6,6 +6,7 @@ type GameState = 'start' | 'playing' | 'gameover';
 interface FallingItem {
   id: number;
   x: number;
+  baseX: number;
   y: number;
   type: 'normal' | 'obstacle';
   color: string;
@@ -13,20 +14,60 @@ interface FallingItem {
   radius: number;
   rotation: number;
   rotationSpeed: number;
+  swayOffset: number;
+}
+
+interface CatchEffect {
+  offsetX: number;
+  offsetY: number;
+  time: number;
+  duration: number;
+  color: string;
 }
 
 const NORMAL_COLORS = ['#7b3c3c', '#4caf50', '#ff9800']; // 小豆色, 緑色, オレンジ色
 const OBSTACLE_COLOR = '#111111'; // お邪魔アイテム（黒系）
 const PLAYER_WIDTH = 100;
-const PLAYER_HEIGHT = 20;
+const PLAYER_HEIGHT = 120;
+
+// 画像アセットのロードと透過処理
+const playerImg = new Image();
+playerImg.src = '/wagashi_ojisan.png';
+let processedImg: HTMLCanvasElement | HTMLImageElement = playerImg;
+
+playerImg.onload = () => {
+  const offscreen = document.createElement('canvas');
+  offscreen.width = playerImg.width;
+  offscreen.height = playerImg.height;
+  const ctx = offscreen.getContext('2d');
+  if (!ctx) return;
+  
+  ctx.drawImage(playerImg, 0, 0);
+  const imageData = ctx.getImageData(0, 0, offscreen.width, offscreen.height);
+  const data = imageData.data;
+  
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    
+    // 白（および白に近い色）を透明にする
+    if (r > 240 && g > 240 && b > 240) {
+      data[i + 3] = 0; // Alphaを0に
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  processedImg = offscreen;
+};
 
 const Game: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameState, setGameState] = useState<GameState>('start');
   const [score, setScore] = useState(0);
 
-  const playerRef = useRef({ x: window.innerWidth / 2, y: window.innerHeight - 100 });
+  const playerRef = useRef({ x: window.innerWidth / 2, y: window.innerHeight - 150 });
   const itemsRef = useRef<FallingItem[]>([]);
+  const effectsRef = useRef<CatchEffect[]>([]); // エフェクト用キュー
   const frameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const spawnTimerRef = useRef<number>(0);
@@ -36,27 +77,35 @@ const Game: React.FC = () => {
     setGameState('playing');
     setScore(0);
     itemsRef.current = [];
+    effectsRef.current = [];
     playerRef.current.x = window.innerWidth / 2;
+    playerRef.current.y = window.innerHeight - 150;
     itemIdCounter.current = 0;
     lastTimeRef.current = performance.now();
   };
 
   const spawnItem = (canvasWidth: number) => {
     const isObstacle = Math.random() < 0.2; // 20%の確率でお邪魔アイテム
-    const radius = 20 + Math.random() * 10; // 20~30のサイズ
+    let radius = 20 + Math.random() * 10; // 基本サイズ20~30
+    if (!isObstacle) {
+      radius *= 2; // 三色のオブジェクトは2倍の大きさにする
+    }
     const color = isObstacle ? OBSTACLE_COLOR : NORMAL_COLORS[Math.floor(Math.random() * NORMAL_COLORS.length)];
     const speed = 2 + Math.random() * 3 + (score / 100); // スコアに応じて少しずつ速くなる
+    const startX = radius + Math.random() * (canvasWidth - radius * 2);
     
     itemsRef.current.push({
       id: itemIdCounter.current++,
-      x: radius + Math.random() * (canvasWidth - radius * 2),
+      x: startX,
+      baseX: startX,
       y: -radius,
       type: isObstacle ? 'obstacle' : 'normal',
       color,
       speed,
       radius,
       rotation: Math.random() * Math.PI * 2,
-      rotationSpeed: (Math.random() - 0.5) * 0.1
+      rotationSpeed: (Math.random() - 0.5) * 0.1,
+      swayOffset: Math.random() * Math.PI * 2
     });
   };
 
@@ -80,9 +129,16 @@ const Game: React.FC = () => {
     const pH = PLAYER_HEIGHT;
 
     // アイテムの更新と描画
+    const currentTimeSec = performance.now() / 1000;
     for (let i = itemsRef.current.length - 1; i >= 0; i--) {
       const item = itemsRef.current[i];
       item.y += item.speed * (deltaTime / 16); // フレームレート非依存
+      
+      if (item.type === 'normal') {
+        // ゆらゆら動く処理（振幅40px、周期にオフセット）
+        item.x = item.baseX + Math.sin(currentTimeSec * 2.5 + item.swayOffset) * 50;
+      }
+
       item.rotation += item.rotationSpeed;
 
       // 描画
@@ -115,17 +171,26 @@ const Game: React.FC = () => {
       ctx.restore();
 
       // 当たり判定 (シンプルな矩形/円ハイブリッド判定)
-      // プレイヤーは横長の楕円（笹の葉）とみなす
       const dx = item.x - pX;
       const dy = item.y - pY;
       
-      // 当たり判定の緩さを調整。笹の葉の横幅半分、縦幅半分に収まっていればヒット
-      if (Math.abs(dx) < pW / 2 && Math.abs(dy) < pH / 2 + item.radius * 0.8) {
+      // 当たり判定の緩さを調整。キャラクターの横幅半分、縦幅半分に収まっていればヒット
+      if (Math.abs(dx) < pW / 2.5 && Math.abs(dy) < pH / 2 + item.radius * 0.8) {
         if (item.type === 'obstacle') {
           setGameState('gameover');
           return; // ゲームオーバーになったらループ中断
         } else {
           setScore(s => s + 10);
+          
+          // キャッチエフェクトを追加
+          effectsRef.current.push({
+            offsetX: dx,
+            offsetY: dy,
+            time: 0,
+            duration: 350, // 350msのアニメーション
+            color: item.color
+          });
+
           itemsRef.current.splice(i, 1);
           continue;
         }
@@ -144,26 +209,75 @@ const Game: React.FC = () => {
       }
     }
 
-    // プレイヤー（笹の葉）の描画
+    // プレイヤー（おじさん）の描画
     ctx.save();
     ctx.translate(pX, pY);
-    ctx.fillStyle = '#2e7d32'; // 笹の色
-    ctx.beginPath();
-    // 笹の葉っぽい形（2つの2次ベジェ曲線で描く）
-    ctx.moveTo(-pW / 2, 0);
-    ctx.quadraticCurveTo(0, -pH, pW / 2, 0);
-    ctx.quadraticCurveTo(0, pH, -pW / 2, 0);
-    ctx.fill();
-    
-    // 葉脈を描く
-    ctx.strokeStyle = '#1b5e20';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-pW / 2, 0);
-    ctx.lineTo(pW / 2, 0);
-    ctx.stroke();
-    
+    if (playerImg.complete) {
+      // 透過処理済みの画像（またはCanvas）を描画
+      ctx.drawImage(processedImg, -pW / 2, -pH / 2, pW, pH);
+    } else {
+      ctx.fillStyle = '#2e7d32'; // プレースホルダー色
+      ctx.fillRect(-pW / 2, -pH / 2, pW, pH);
+    }
     ctx.restore();
+
+    // キャッチエフェクト（笹で包むアニメーション）の描画
+    for (let i = effectsRef.current.length - 1; i >= 0; i--) {
+      const effect = effectsRef.current[i];
+      effect.time += deltaTime;
+      if (effect.time > effect.duration) {
+        effectsRef.current.splice(i, 1);
+        continue;
+      }
+      
+      const progress = effect.time / effect.duration; // 0 to 1
+      const effX = pX + effect.offsetX;
+      const effY = pY + effect.offsetY;
+      
+      ctx.save();
+      ctx.translate(effX, effY);
+      
+      // キャッチされた三角形が縮みながら消える
+      ctx.save();
+      const scale = 1 - progress; // 1から0へ縮小
+      ctx.scale(scale, scale);
+      ctx.fillStyle = effect.color;
+      ctx.beginPath();
+      ctx.moveTo(0, -30);
+      ctx.lineTo(30 * 0.866, 30 * 0.5);
+      ctx.lineTo(-30 * 0.866, 30 * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      
+      // 左右から笹の葉が合わさって包み込む
+      ctx.fillStyle = '#2e7d32'; // 笹の緑
+      ctx.strokeStyle = '#1b5e20';
+      ctx.lineWidth = 2;
+      
+      // 左の笹
+      ctx.save();
+      // -45度(開いている)から少し内側まで回転しつつ近づく
+      const leftAngle = -(Math.PI / 4) * (1 - progress) + (Math.PI / 10) * progress; 
+      ctx.rotate(leftAngle);
+      ctx.beginPath();
+      ctx.ellipse(-20 + progress * 15, 0, 25, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      
+      // 右の笹
+      ctx.save();
+      const rightAngle = (Math.PI / 4) * (1 - progress) - (Math.PI / 10) * progress;
+      ctx.rotate(rightAngle);
+      ctx.beginPath();
+      ctx.ellipse(20 - progress * 15, 0, 25, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      
+      ctx.restore();
+    }
 
   }, [gameState, score]);
 
@@ -194,7 +308,7 @@ const Game: React.FC = () => {
       const resize = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        playerRef.current.y = window.innerHeight - 100;
+        playerRef.current.y = window.innerHeight - 150;
         
         // Resize時に再描画が必要であれば行う
         if (gameState !== 'playing') {
