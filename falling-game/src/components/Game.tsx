@@ -187,7 +187,7 @@ const Game: React.FC = () => {
             offsetX: dx,
             offsetY: dy,
             time: 0,
-            duration: 350, // 350msのアニメーション
+            duration: 1350, // 350ms(包む) + 1000ms(表示)
             color: item.color
           });
 
@@ -221,7 +221,7 @@ const Game: React.FC = () => {
     }
     ctx.restore();
 
-    // キャッチエフェクト（笹で包むアニメーション）の描画
+    // キャッチエフェクト（笹で包むアニメーション等）の描画
     for (let i = effectsRef.current.length - 1; i >= 0; i--) {
       const effect = effectsRef.current[i];
       effect.time += deltaTime;
@@ -230,53 +230,99 @@ const Game: React.FC = () => {
         continue;
       }
       
-      const progress = effect.time / effect.duration; // 0 to 1
-      const effX = pX + effect.offsetX;
-      const effY = pY + effect.offsetY;
+      const WRAP_TIME = 350; // 包むまでの時間
       
-      ctx.save();
-      ctx.translate(effX, effY);
-      
-      // キャッチされた三角形が縮みながら消える
-      ctx.save();
-      const scale = 1 - progress; // 1から0へ縮小
-      ctx.scale(scale, scale);
-      ctx.fillStyle = effect.color;
-      ctx.beginPath();
-      ctx.moveTo(0, -30);
-      ctx.lineTo(30 * 0.866, 30 * 0.5);
-      ctx.lineTo(-30 * 0.866, 30 * 0.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-      
-      // 左右から笹の葉が合わさって包み込む
-      ctx.fillStyle = '#2e7d32'; // 笹の緑
-      ctx.strokeStyle = '#1b5e20';
-      ctx.lineWidth = 2;
-      
-      // 左の笹
-      ctx.save();
-      // -45度(開いている)から少し内側まで回転しつつ近づく
-      const leftAngle = -(Math.PI / 4) * (1 - progress) + (Math.PI / 10) * progress; 
-      ctx.rotate(leftAngle);
-      ctx.beginPath();
-      ctx.ellipse(-20 + progress * 15, 0, 25, 12, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-      
-      // 右の笹
-      ctx.save();
-      const rightAngle = (Math.PI / 4) * (1 - progress) - (Math.PI / 10) * progress;
-      ctx.rotate(rightAngle);
-      ctx.beginPath();
-      ctx.ellipse(20 - progress * 15, 0, 25, 12, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-      
-      ctx.restore();
+      if (effect.time < WRAP_TIME) {
+        // --- 1. 包み込むアニメーション ---
+        const progress = effect.time / WRAP_TIME; // 0 to 1
+        const effX = pX + effect.offsetX;
+        const effY = pY + effect.offsetY;
+        
+        ctx.save();
+        ctx.translate(effX, effY);
+        
+        // キャッチされた三角形が縮みながら消える
+        ctx.save();
+        const scale = 1 - progress; // 1から0へ縮小
+        ctx.scale(scale, scale);
+        ctx.fillStyle = effect.color;
+        ctx.beginPath();
+        ctx.moveTo(0, -30);
+        ctx.lineTo(30 * 0.866, 30 * 0.5);
+        ctx.lineTo(-30 * 0.866, 30 * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        
+        // 左右から笹の葉が合わさって包み込む（大きめ）
+        ctx.fillStyle = '#2e7d32'; // 笹の緑
+        ctx.strokeStyle = '#1b5e20';
+        ctx.lineWidth = 2;
+        
+        ctx.save();
+        const leftAngle = -(Math.PI / 4) * (1 - progress) + (Math.PI / 10) * progress; 
+        ctx.rotate(leftAngle);
+        ctx.beginPath();
+        ctx.ellipse(-30 + progress * 25, 0, 40, 20, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+        
+        ctx.save();
+        const rightAngle = (Math.PI / 4) * (1 - progress) - (Math.PI / 10) * progress;
+        ctx.rotate(rightAngle);
+        ctx.beginPath();
+        ctx.ellipse(30 - progress * 25, 0, 40, 20, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+        
+        ctx.restore();
+      } else {
+        // --- 2. 頭の上に完成した笹の三角形と文字を表示 ---
+        const showTime = effect.time - WRAP_TIME;
+        const showDuration = effect.duration - WRAP_TIME;
+        // 最後200msでフェードアウト
+        const alpha = showTime > showDuration - 200 ? (showDuration - showTime) / 200 : 1;
+        
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, alpha);
+        
+        const headX = pX;
+        const headY = pY - pH / 2 - 40; // 頭の少し上
+        ctx.translate(headX, headY);
+        
+        // 笹の三角形（ちまき風）
+        ctx.fillStyle = '#2e7d32';
+        ctx.beginPath();
+        ctx.moveTo(0, -25);
+        ctx.lineTo(25 * 0.866, 25 * 0.5);
+        ctx.lineTo(-25 * 0.866, 25 * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#1b5e20';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 文字の決定
+        let text = "";
+        if (effect.color === '#7b3c3c') text = "小豆";
+        else if (effect.color === '#4caf50') text = "抹茶";
+        else if (effect.color === '#ff9800') text = "甘夏";
+        
+        if (text) {
+          ctx.fillStyle = effect.color; 
+          ctx.font = 'bold 24px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.strokeStyle = 'white'; // 白い縁取りで見やすく
+          ctx.lineWidth = 4;
+          ctx.strokeText(text, 0, -35); 
+          ctx.fillText(text, 0, -35);
+        }
+        
+        ctx.restore();
+      }
     }
 
   }, [gameState, score]);
