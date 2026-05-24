@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import './Game.css';
 
-type GameState = 'start' | 'playing' | 'gameover';
+type GameState = 'start' | 'howToPlay' | 'playing' | 'gameover';
 
 interface FallingItem {
   id: number;
@@ -490,10 +490,25 @@ const Game: React.FC = () => {
 
       {gameState === 'start' && (
         <div className="overlay">
-          <h1>笹の葉キャッチ</h1>
-          <p>スワイプで操作！三角形をキャッチしよう</p>
-          <p style={{fontSize: '14px', marginBottom: '30px'}}>※黒いトゲトゲや、取り逃しはゲームオーバー！</p>
+          <h1>博多水無月ゲーム</h1>
+          <p>スワイプで操作！博多水無月をキャッチしよう</p>
           <button onClick={startGame}>スタート</button>
+          <button onClick={() => setGameState('howToPlay')} style={{ marginTop: '15px', backgroundColor: '#2196f3' }}>遊び方</button>
+        </div>
+      )}
+
+      {gameState === 'howToPlay' && (
+        <div className="overlay" style={{ padding: '20px', textAlign: 'left', maxWidth: '400px' }}>
+          <h2 style={{ textAlign: 'center', marginBottom: '20px', fontSize: '28px' }}>遊び方</h2>
+          <ul style={{ lineHeight: '1.8', fontSize: '18px', paddingLeft: '20px' }}>
+            <li style={{ marginBottom: '10px' }}><strong>博多水無月（三角形）</strong><br/>キャッチするとスコア+10。小豆、抹茶、甘夏が落ちてきます。</li>
+            <li style={{ marginBottom: '10px' }}><strong>お邪魔アイテム（黒い星）</strong><br/>キャッチしてしまうとゲームオーバー！</li>
+            <li style={{ marginBottom: '10px' }}><strong>お茶（湯飲み茶碗）</strong><br/>お助けアイテム。キャッチするとボーナス50点と、<strong>10秒間スローモーション</strong>になります！</li>
+            <li><strong>取り逃がし</strong><br/>博多水無月を画面外に落としてしまうとゲームオーバーです（お邪魔アイテムは落としてOK）。</li>
+          </ul>
+          <div style={{ textAlign: 'center', marginTop: '30px' }}>
+            <button onClick={() => setGameState('start')}>戻る</button>
+          </div>
         </div>
       )}
 
