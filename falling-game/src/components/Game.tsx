@@ -220,7 +220,7 @@ const Game: React.FC = () => {
           return; // ゲームオーバーになったらループ中断
         } else if (item.type === 'help') {
           setScore(s => s + 50); // 湯飲みのボーナススコア
-          slowDownTimerRef.current = 5000; // 5秒間スローダウン
+          slowDownTimerRef.current = 10000; // 10秒間スローダウン
           catchPoseTimerRef.current = 500;
           itemsRef.current.splice(i, 1);
           continue;
@@ -392,7 +392,7 @@ const Game: React.FC = () => {
     if (slowDownTimerRef.current > 0) {
       const barWidth = 300;
       const barHeight = 20;
-      const progress = Math.max(0, slowDownTimerRef.current / 5000);
+      const progress = Math.max(0, slowDownTimerRef.current / 10000);
       const currentWidth = barWidth * progress;
       const barX = canvas.width / 2 - barWidth / 2;
       const barY = 60; // スコアの下あたり
