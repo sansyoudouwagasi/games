@@ -31,34 +31,38 @@ const PLAYER_WIDTH = 100;
 const PLAYER_HEIGHT = 120;
 
 // 画像アセットのロードと透過処理
+const processImageTransparent = (img: HTMLImageElement): Promise<HTMLCanvasElement | HTMLImageElement> => {
+  return new Promise((resolve) => {
+    img.onload = () => {
+      const offscreen = document.createElement('canvas');
+      offscreen.width = img.width;
+      offscreen.height = img.height;
+      const ctx = offscreen.getContext('2d');
+      if (!ctx) { resolve(img); return; }
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, offscreen.width, offscreen.height);
+      const data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 240 && data[i + 1] > 240 && data[i + 2] > 240) {
+          data[i + 3] = 0;
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+      resolve(offscreen);
+    };
+    img.onerror = () => resolve(img);
+  });
+};
+
 const playerImg = new Image();
 playerImg.src = '/mario_ojisan.png';
 let processedImg: HTMLCanvasElement | HTMLImageElement = playerImg;
+processImageTransparent(playerImg).then(c => processedImg = c);
 
-playerImg.onload = () => {
-  const offscreen = document.createElement('canvas');
-  offscreen.width = playerImg.width;
-  offscreen.height = playerImg.height;
-  const ctx = offscreen.getContext('2d');
-  if (!ctx) return;
-  
-  ctx.drawImage(playerImg, 0, 0);
-  const imageData = ctx.getImageData(0, 0, offscreen.width, offscreen.height);
-  const data = imageData.data;
-  
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    
-    // 白（および白に近い色）を透明にする
-    if (r > 240 && g > 240 && b > 240) {
-      data[i + 3] = 0; // Alphaを0に
-    }
-  }
-  ctx.putImageData(imageData, 0, 0);
-  processedImg = offscreen;
-};
+const playerCatchImg = new Image();
+playerCatchImg.src = '/mario_ojisan_catch.png';
+let processedCatchImg: HTMLCanvasElement | HTMLImageElement = playerCatchImg;
+processImageTransparent(playerCatchImg).then(c => processedCatchImg = c);
 
 const Game: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -72,6 +76,7 @@ const Game: React.FC = () => {
   const lastTimeRef = useRef<number>(0);
   const spawnTimerRef = useRef<number>(0);
   const itemIdCounter = useRef<number>(0);
+  const catchPoseTimerRef = useRef<number>(0);
 
   const startGame = () => {
     setGameState('playing');
@@ -182,6 +187,9 @@ const Game: React.FC = () => {
         } else {
           setScore(s => s + 10);
           
+          // キャッチポーズのタイマーをセット
+          catchPoseTimerRef.current = 500;
+          
           // キャッチエフェクトを追加
           effectsRef.current.push({
             offsetX: dx,
@@ -212,12 +220,27 @@ const Game: React.FC = () => {
     // プレイヤー（おじさん）の描画
     ctx.save();
     ctx.translate(pX, pY);
-    if (playerImg.complete) {
-      // 透過処理済みの画像（またはCanvas）を描画
-      ctx.drawImage(processedImg, -pW / 2, -pH / 2, pW, pH);
+    
+    // キャッチポーズのタイマー更新
+    if (catchPoseTimerRef.current > 0) {
+      catchPoseTimerRef.current -= deltaTime;
+    }
+
+    if (catchPoseTimerRef.current > 0) {
+      if (playerCatchImg.complete) {
+        ctx.drawImage(processedCatchImg, -pW / 2, -pH / 2, pW, pH);
+      } else {
+        ctx.fillStyle = '#ffeb3b'; // プレースホルダー色
+        ctx.fillRect(-pW / 2, -pH / 2, pW, pH);
+      }
     } else {
-      ctx.fillStyle = '#2e7d32'; // プレースホルダー色
-      ctx.fillRect(-pW / 2, -pH / 2, pW, pH);
+      if (playerImg.complete) {
+        // 透過処理済みの画像（またはCanvas）を描画
+        ctx.drawImage(processedImg, -pW / 2, -pH / 2, pW, pH);
+      } else {
+        ctx.fillStyle = '#2e7d32'; // プレースホルダー色
+        ctx.fillRect(-pW / 2, -pH / 2, pW, pH);
+      }
     }
     ctx.restore();
 
