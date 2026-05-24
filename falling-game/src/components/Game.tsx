@@ -8,7 +8,7 @@ interface FallingItem {
   x: number;
   baseX: number;
   y: number;
-  type: 'normal' | 'obstacle';
+  type: 'normal' | 'obstacle' | 'help';
   color: string;
   speed: number;
   radius: number;
@@ -64,6 +64,11 @@ playerCatchImg.src = '/mario_ojisan_catch.png';
 let processedCatchImg: HTMLCanvasElement | HTMLImageElement = playerCatchImg;
 processImageTransparent(playerCatchImg).then(c => processedCatchImg = c);
 
+const yunomiImg = new Image();
+yunomiImg.src = '/yunomi.png';
+let processedYunomiImg: HTMLCanvasElement | HTMLImageElement = yunomiImg;
+processImageTransparent(yunomiImg).then(c => processedYunomiImg = c);
+
 const Game: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameState, setGameState] = useState<GameState>('start');
@@ -77,6 +82,7 @@ const Game: React.FC = () => {
   const spawnTimerRef = useRef<number>(0);
   const itemIdCounter = useRef<number>(0);
   const catchPoseTimerRef = useRef<number>(0);
+  const slowDownTimerRef = useRef<number>(0);
 
   const startGame = () => {
     setGameState('playing');
@@ -86,16 +92,27 @@ const Game: React.FC = () => {
     playerRef.current.x = window.innerWidth / 2;
     playerRef.current.y = window.innerHeight - 150;
     itemIdCounter.current = 0;
+    slowDownTimerRef.current = 0;
     lastTimeRef.current = performance.now();
   };
 
   const spawnItem = (canvasWidth: number) => {
-    const isObstacle = Math.random() < 0.2; // 20%の確率でお邪魔アイテム
-    let radius = 20 + Math.random() * 10; // 基本サイズ20~30
-    if (!isObstacle) {
-      radius *= 2; // 三色のオブジェクトは2倍の大きさにする
+    // 速度が上がってきたらお助けアイテムが出やすくなる。最大5%
+    const helpChance = Math.min(0.05, score / 5000); 
+    const r = Math.random();
+    
+    let type: 'normal' | 'obstacle' | 'help' = 'normal';
+    if (r < helpChance) {
+      type = 'help';
+    } else if (r < helpChance + 0.2) {
+      type = 'obstacle';
     }
-    const color = isObstacle ? OBSTACLE_COLOR : NORMAL_COLORS[Math.floor(Math.random() * NORMAL_COLORS.length)];
+    
+    let radius = 20 + Math.random() * 10; // 基本サイズ20~30
+    if (type === 'normal') radius *= 2; // 三色のオブジェクトは2倍の大きさにする
+    if (type === 'help') radius *= 1.5; // 湯飲みは少し大きめ
+    
+    const color = type === 'obstacle' ? OBSTACLE_COLOR : (type === 'help' ? '#8bc34a' : NORMAL_COLORS[Math.floor(Math.random() * NORMAL_COLORS.length)]);
     const speed = 2 + Math.random() * 3 + (score / 100); // スコアに応じて少しずつ速くなる
     const startX = radius + Math.random() * (canvasWidth - radius * 2);
     
@@ -104,7 +121,7 @@ const Game: React.FC = () => {
       x: startX,
       baseX: startX,
       y: -radius,
-      type: isObstacle ? 'obstacle' : 'normal',
+      type: type,
       color,
       speed,
       radius,
@@ -135,9 +152,17 @@ const Game: React.FC = () => {
 
     // アイテムの更新と描画
     const currentTimeSec = performance.now() / 1000;
+    
+    // スローダウンタイマーの更新
+    if (slowDownTimerRef.current > 0) {
+      slowDownTimerRef.current -= deltaTime;
+    }
+    const isSlow = slowDownTimerRef.current > 0;
+    const speedMultiplier = isSlow ? 0.4 : 1.0;
+
     for (let i = itemsRef.current.length - 1; i >= 0; i--) {
       const item = itemsRef.current[i];
-      item.y += item.speed * (deltaTime / 16); // フレームレート非依存
+      item.y += (item.speed * speedMultiplier) * (deltaTime / 16); // フレームレート非依存
       
       if (item.type === 'normal') {
         // ゆらゆら動く処理（振幅40px、周期にオフセット）
@@ -160,7 +185,7 @@ const Game: React.FC = () => {
         ctx.lineTo(-item.radius * 0.866, item.radius * 0.5);
         ctx.closePath();
         ctx.fill();
-      } else {
+      } else if (item.type === 'obstacle') {
         // お邪魔アイテム（トゲトゲの形などを想定、とりあえずギザギザの星型）
         ctx.beginPath();
         const spikes = 6;
@@ -172,6 +197,15 @@ const Game: React.FC = () => {
         }
         ctx.closePath();
         ctx.fill();
+      } else if (item.type === 'help') {
+        // 湯飲み茶碗を描画
+        if (yunomiImg.complete) {
+          ctx.drawImage(processedYunomiImg, -item.radius, -item.radius, item.radius * 2, item.radius * 2);
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, item.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.restore();
 
@@ -184,6 +218,12 @@ const Game: React.FC = () => {
         if (item.type === 'obstacle') {
           setGameState('gameover');
           return; // ゲームオーバーになったらループ中断
+        } else if (item.type === 'help') {
+          setScore(s => s + 50); // 湯飲みのボーナススコア
+          slowDownTimerRef.current = 5000; // 5秒間スローダウン
+          catchPoseTimerRef.current = 500;
+          itemsRef.current.splice(i, 1);
+          continue;
         } else {
           setScore(s => s + 10);
           
@@ -346,6 +386,31 @@ const Game: React.FC = () => {
         
         ctx.restore();
       }
+    }
+
+    // スローモーション効果のバー描画
+    if (slowDownTimerRef.current > 0) {
+      const barWidth = 300;
+      const barHeight = 20;
+      const progress = Math.max(0, slowDownTimerRef.current / 5000);
+      const currentWidth = barWidth * progress;
+      const barX = canvas.width / 2 - barWidth / 2;
+      const barY = 60; // スコアの下あたり
+
+      // 背景
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(barX, barY, barWidth, barHeight);
+      
+      // バー（緑色）
+      ctx.fillStyle = '#4caf50';
+      ctx.fillRect(barX, barY, currentWidth, barHeight);
+
+      // テキスト
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Slow Motion!', canvas.width / 2, barY + barHeight / 2);
     }
 
   }, [gameState, score]);
