@@ -72,7 +72,6 @@ processImageTransparent(yunomiImg).then(c => processedYunomiImg = c);
 const Game: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameState, setGameState] = useState<GameState>('start');
-  const [score, setScore] = useState(0);
 
   const gameStateRef = useRef<GameState>('start');
   const scoreRef = useRef<number>(0);
@@ -193,7 +192,9 @@ const Game: React.FC = () => {
     stopSlowMotionMusic();
     changeGameState('playing');
     scoreRef.current = 0;
-    setScore(0);
+    const scoreBoard = document.getElementById('score-board');
+    if (scoreBoard) scoreBoard.innerText = 'Score: 0';
+
     itemsRef.current = [];
     effectsRef.current = [];
     playerRef.current.x = window.innerWidth / 2;
@@ -334,7 +335,9 @@ const Game: React.FC = () => {
           playCatchSound('help');
           startSlowMotionMusic();
           scoreRef.current += 50; // 湯飲みのボーナススコア
-          setScore(scoreRef.current);
+          const scoreBoard = document.getElementById('score-board');
+          if (scoreBoard) scoreBoard.innerText = `Score: ${scoreRef.current}`;
+
           slowDownTimerRef.current = 10000; // 10秒間スローダウン
           catchPoseTimerRef.current = 500;
           itemsRef.current.splice(i, 1);
@@ -342,7 +345,8 @@ const Game: React.FC = () => {
         } else {
           playCatchSound('normal');
           scoreRef.current += 10;
-          setScore(scoreRef.current);
+          const scoreBoard = document.getElementById('score-board');
+          if (scoreBoard) scoreBoard.innerText = `Score: ${scoreRef.current}`;
           
           // キャッチポーズのタイマーをセット
           catchPoseTimerRef.current = 500;
@@ -603,7 +607,7 @@ const Game: React.FC = () => {
       onTouchMove={onTouchMove} 
       onMouseMove={onMouseMove}
     >
-      <div className="score-display">Score: {score}</div>
+      <div id="score-board" className="score-display">Score: {scoreRef.current}</div>
       <canvas ref={canvasRef} className="game-canvas" />
 
       {gameState === 'start' && (
@@ -643,7 +647,7 @@ const Game: React.FC = () => {
       {gameState === 'gameover' && (
         <div className="overlay">
           <h1>Game Over</h1>
-          <p>Score: {score}</p>
+          <p>Score: {scoreRef.current}</p>
           <button onClick={startGame}>もう一度プレイ</button>
         </div>
       )}
