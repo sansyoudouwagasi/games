@@ -32,7 +32,7 @@ const PLAYER_HEIGHT = 120;
 
 // 画像アセットのロードと透過処理
 const playerImg = new Image();
-playerImg.src = '/wagashi_ojisan.png';
+playerImg.src = '/mario_ojisan.png';
 let processedImg: HTMLCanvasElement | HTMLImageElement = playerImg;
 
 playerImg.onload = () => {
