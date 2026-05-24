@@ -616,16 +616,26 @@ const Game: React.FC = () => {
       )}
 
       {gameState === 'howToPlay' && (
-        <div className="overlay" style={{ padding: '20px', textAlign: 'left', maxWidth: '400px' }}>
-          <h2 style={{ textAlign: 'center', marginBottom: '20px', fontSize: '28px' }}>遊び方</h2>
-          <ul style={{ lineHeight: '1.8', fontSize: '18px', paddingLeft: '20px' }}>
-            <li style={{ marginBottom: '10px' }}><strong>博多水無月（三角形）</strong><br/>キャッチするとスコア+10。小豆、抹茶、甘夏が落ちてきます。</li>
-            <li style={{ marginBottom: '10px' }}><strong>お邪魔アイテム（黒い星）</strong><br/>キャッチしてしまうとゲームオーバー！</li>
-            <li style={{ marginBottom: '10px' }}><strong>お茶（湯飲み茶碗）</strong><br/>お助けアイテム。キャッチするとボーナス50点と、<strong>10秒間スローモーション</strong>になります！</li>
-            <li><strong>取り逃がし</strong><br/>博多水無月を画面外に落としてしまうとゲームオーバーです（お邪魔アイテムは落としてOK）。</li>
-          </ul>
-          <div style={{ textAlign: 'center', marginTop: '30px' }}>
-            <button onClick={() => changeGameState('start')}>戻る</button>
+        <div className="overlay" style={{ padding: '20px' }}>
+          <div style={{ 
+            maxWidth: '400px', 
+            maxHeight: '85vh', 
+            overflowY: 'auto', 
+            backgroundColor: 'rgba(0,0,0,0.8)', 
+            padding: '20px', 
+            borderRadius: '12px',
+            textAlign: 'left'
+          }}>
+            <h2 style={{ textAlign: 'center', marginBottom: '20px', fontSize: '28px' }}>遊び方</h2>
+            <ul style={{ lineHeight: '1.8', fontSize: '16px', paddingLeft: '20px', margin: 0 }}>
+              <li style={{ marginBottom: '10px' }}><strong>博多水無月（三角形）</strong><br/>キャッチするとスコア+10。小豆、抹茶、甘夏が落ちてきます。</li>
+              <li style={{ marginBottom: '10px' }}><strong>お邪魔アイテム（黒い星）</strong><br/>キャッチしてしまうとゲームオーバー！</li>
+              <li style={{ marginBottom: '10px' }}><strong>お茶（湯飲み茶碗）</strong><br/>お助けアイテム。ボーナス50点と、<strong>10秒間スローモーション</strong>になります！</li>
+              <li><strong>取り逃がし</strong><br/>博多水無月を画面外に落とすとゲームオーバーです（お邪魔は落としてOK）。</li>
+            </ul>
+            <div style={{ textAlign: 'center', marginTop: '20px', paddingBottom: '10px' }}>
+              <button onClick={() => changeGameState('start')} style={{ backgroundColor: '#ff9800' }}>タイトルへ戻る</button>
+            </div>
           </div>
         </div>
       )}
