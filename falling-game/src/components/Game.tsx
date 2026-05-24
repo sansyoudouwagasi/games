@@ -83,8 +83,106 @@ const Game: React.FC = () => {
   const itemIdCounter = useRef<number>(0);
   const catchPoseTimerRef = useRef<number>(0);
   const slowDownTimerRef = useRef<number>(0);
+  
+  // Audio Context
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const bgmOscillatorsRef = useRef<OscillatorNode[]>([]);
+  const bgmGainRef = useRef<GainNode | null>(null);
+
+  // Audio Context の初期化 (ユーザーアクション時に呼ぶ)
+  const initAudio = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+  };
+
+  const playCatchSound = (type: 'normal' | 'help') => {
+    if (!audioCtxRef.current) return;
+    const ctx = audioCtxRef.current;
+    
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    if (type === 'normal') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.1);
+    } else {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(400, ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.2);
+      osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.4);
+      gain.gain.setValueAtTime(0.5, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.5);
+    }
+  };
+
+  const startSlowMotionMusic = () => {
+    if (!audioCtxRef.current) return;
+    stopSlowMotionMusic(); // 既に鳴っていれば止める
+    
+    const ctx = audioCtxRef.current;
+    const masterGain = ctx.createGain();
+    masterGain.gain.value = 0.2; // 全体の音量
+    masterGain.connect(ctx.destination);
+    bgmGainRef.current = masterGain;
+
+    // Fmaj7 のような和音でリラックスした空間を演出
+    const frequencies = [349.23, 440.00, 523.25, 659.25]; // F, A, C, E
+    const oscs: OscillatorNode[] = [];
+    
+    frequencies.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq + (i * 0.5); 
+      
+      const lfo = ctx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = 0.5 + (i * 0.1); // ゆっくりとした揺らぎ
+      
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 10; 
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.detune);
+      
+      osc.connect(masterGain);
+      osc.start();
+      lfo.start();
+      
+      oscs.push(osc, lfo);
+    });
+    
+    bgmOscillatorsRef.current = oscs;
+  };
+
+  const stopSlowMotionMusic = () => {
+    if (bgmGainRef.current && audioCtxRef.current) {
+      bgmGainRef.current.gain.linearRampToValueAtTime(0, audioCtxRef.current.currentTime + 1.0);
+    }
+    setTimeout(() => {
+      bgmOscillatorsRef.current.forEach(osc => {
+        try { osc.stop(); } catch(e) {}
+      });
+      bgmOscillatorsRef.current = [];
+      if (bgmGainRef.current) {
+        bgmGainRef.current.disconnect();
+        bgmGainRef.current = null;
+      }
+    }, 1100);
+  };
 
   const startGame = () => {
+    initAudio();
+    stopSlowMotionMusic();
     setGameState('playing');
     setScore(0);
     itemsRef.current = [];
@@ -156,6 +254,9 @@ const Game: React.FC = () => {
     // スローダウンタイマーの更新
     if (slowDownTimerRef.current > 0) {
       slowDownTimerRef.current -= deltaTime;
+      if (slowDownTimerRef.current <= 0) {
+        stopSlowMotionMusic();
+      }
     }
     const isSlow = slowDownTimerRef.current > 0;
     const speedMultiplier = isSlow ? 0.4 : 1.0;
@@ -216,15 +317,19 @@ const Game: React.FC = () => {
       // 当たり判定の緩さを調整。キャラクターの横幅半分、縦幅半分に収まっていればヒット
       if (Math.abs(dx) < pW / 2.5 && Math.abs(dy) < pH / 2 + item.radius * 0.8) {
         if (item.type === 'obstacle') {
+          stopSlowMotionMusic();
           setGameState('gameover');
           return; // ゲームオーバーになったらループ中断
         } else if (item.type === 'help') {
+          playCatchSound('help');
+          startSlowMotionMusic();
           setScore(s => s + 50); // 湯飲みのボーナススコア
           slowDownTimerRef.current = 10000; // 10秒間スローダウン
           catchPoseTimerRef.current = 500;
           itemsRef.current.splice(i, 1);
           continue;
         } else {
+          playCatchSound('normal');
           setScore(s => s + 10);
           
           // キャッチポーズのタイマーをセット
@@ -248,6 +353,7 @@ const Game: React.FC = () => {
       if (item.y > canvas.height + item.radius) {
         if (item.type === 'normal') {
           // 通常アイテムを落としたらゲームオーバー
+          stopSlowMotionMusic();
           setGameState('gameover');
           return;
         } else {
