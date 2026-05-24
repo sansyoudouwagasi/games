@@ -74,6 +74,9 @@ const Game: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>('start');
   const [score, setScore] = useState(0);
 
+  const gameStateRef = useRef<GameState>('start');
+  const scoreRef = useRef<number>(0);
+
   const playerRef = useRef({ x: window.innerWidth / 2, y: window.innerHeight - 150 });
   const itemsRef = useRef<FallingItem[]>([]);
   const effectsRef = useRef<CatchEffect[]>([]); // エフェクト用キュー
@@ -180,10 +183,16 @@ const Game: React.FC = () => {
     }, 1100);
   };
 
+  const changeGameState = (state: GameState) => {
+    gameStateRef.current = state;
+    setGameState(state);
+  };
+
   const startGame = () => {
     initAudio();
     stopSlowMotionMusic();
-    setGameState('playing');
+    changeGameState('playing');
+    scoreRef.current = 0;
     setScore(0);
     itemsRef.current = [];
     effectsRef.current = [];
@@ -196,7 +205,8 @@ const Game: React.FC = () => {
 
   const spawnItem = (canvasWidth: number) => {
     // 速度が上がってきたらお助けアイテムが出やすくなる。最大5%
-    const helpChance = Math.min(0.05, score / 5000); 
+    const currentScore = scoreRef.current;
+    const helpChance = Math.min(0.05, currentScore / 5000); 
     const r = Math.random();
     
     let type: 'normal' | 'obstacle' | 'help' = 'normal';
@@ -211,7 +221,7 @@ const Game: React.FC = () => {
     if (type === 'help') radius *= 1.5; // 湯飲みは少し大きめ
     
     const color = type === 'obstacle' ? OBSTACLE_COLOR : (type === 'help' ? '#8bc34a' : NORMAL_COLORS[Math.floor(Math.random() * NORMAL_COLORS.length)]);
-    const speed = 2 + Math.random() * 3 + (score / 100); // スコアに応じて少しずつ速くなる
+    const speed = 2 + Math.random() * 3 + (currentScore / 100); // スコアに応じて少しずつ速くなる
     const startX = radius + Math.random() * (canvasWidth - radius * 2);
     
     itemsRef.current.push({
@@ -230,14 +240,14 @@ const Game: React.FC = () => {
   };
 
   const update = useCallback((deltaTime: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
-    if (gameState !== 'playing') return;
+    if (gameStateRef.current !== 'playing') return;
 
     // 画面クリア
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // アイテム生成
     spawnTimerRef.current += deltaTime;
-    const spawnInterval = Math.max(500, 1500 - score * 5); // だんだん生成間隔を短くする
+    const spawnInterval = Math.max(500, 1500 - scoreRef.current * 5); // だんだん生成間隔を短くする
     if (spawnTimerRef.current > spawnInterval) {
       spawnItem(canvas.width);
       spawnTimerRef.current = 0;
@@ -318,19 +328,21 @@ const Game: React.FC = () => {
       if (Math.abs(dx) < pW / 2.5 && Math.abs(dy) < pH / 2 + item.radius * 0.8) {
         if (item.type === 'obstacle') {
           stopSlowMotionMusic();
-          setGameState('gameover');
+          changeGameState('gameover');
           return; // ゲームオーバーになったらループ中断
         } else if (item.type === 'help') {
           playCatchSound('help');
           startSlowMotionMusic();
-          setScore(s => s + 50); // 湯飲みのボーナススコア
+          scoreRef.current += 50; // 湯飲みのボーナススコア
+          setScore(scoreRef.current);
           slowDownTimerRef.current = 10000; // 10秒間スローダウン
           catchPoseTimerRef.current = 500;
           itemsRef.current.splice(i, 1);
           continue;
         } else {
           playCatchSound('normal');
-          setScore(s => s + 10);
+          scoreRef.current += 10;
+          setScore(scoreRef.current);
           
           // キャッチポーズのタイマーをセット
           catchPoseTimerRef.current = 500;
@@ -354,7 +366,7 @@ const Game: React.FC = () => {
         if (item.type === 'normal') {
           // 通常アイテムを落としたらゲームオーバー
           stopSlowMotionMusic();
-          setGameState('gameover');
+          changeGameState('gameover');
           return;
         } else {
           // お邪魔アイテムは落ちてもOK
@@ -519,10 +531,10 @@ const Game: React.FC = () => {
       ctx.fillText('Slow Motion!', canvas.width / 2, barY + barHeight / 2);
     }
 
-  }, [gameState, score]);
+  }, []);
 
   const loop = useCallback((time: number) => {
-    if (gameState !== 'playing') {
+    if (gameStateRef.current !== 'playing') {
       frameRef.current = requestAnimationFrame(loop);
       return;
     }
@@ -551,7 +563,7 @@ const Game: React.FC = () => {
         playerRef.current.y = window.innerHeight - 150;
         
         // Resize時に再描画が必要であれば行う
-        if (gameState !== 'playing') {
+        if (gameStateRef.current !== 'playing') {
           const ctx = canvas.getContext('2d');
           if (ctx) {
              ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -564,7 +576,7 @@ const Game: React.FC = () => {
 
       return () => window.removeEventListener('resize', resize);
     }
-  }, [gameState]);
+  }, []);
 
   useEffect(() => {
     frameRef.current = requestAnimationFrame(loop);
@@ -573,7 +585,7 @@ const Game: React.FC = () => {
 
   // タッチ/マウス操作イベント
   const handleMove = (clientX: number) => {
-    if (gameState === 'playing') {
+    if (gameStateRef.current === 'playing') {
       playerRef.current.x = clientX;
     }
   };
@@ -599,7 +611,7 @@ const Game: React.FC = () => {
           <h1>博多水無月ゲーム</h1>
           <p>スワイプで操作！博多水無月をキャッチしよう</p>
           <button onClick={startGame}>スタート</button>
-          <button onClick={() => setGameState('howToPlay')} style={{ marginTop: '15px', backgroundColor: '#2196f3' }}>遊び方</button>
+          <button onClick={() => changeGameState('howToPlay')} style={{ marginTop: '15px', backgroundColor: '#2196f3' }}>遊び方</button>
         </div>
       )}
 
@@ -613,7 +625,7 @@ const Game: React.FC = () => {
             <li><strong>取り逃がし</strong><br/>博多水無月を画面外に落としてしまうとゲームオーバーです（お邪魔アイテムは落としてOK）。</li>
           </ul>
           <div style={{ textAlign: 'center', marginTop: '30px' }}>
-            <button onClick={() => setGameState('start')}>戻る</button>
+            <button onClick={() => changeGameState('start')}>戻る</button>
           </div>
         </div>
       )}
