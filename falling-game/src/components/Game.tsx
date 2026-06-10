@@ -210,10 +210,11 @@ const Game: React.FC = () => {
     const helpChance = Math.min(0.05, currentScore / 5000); 
     const r = Math.random();
     
+    const isSlow = slowDownTimerRef.current > 0;
     let type: 'normal' | 'obstacle' | 'help' = 'normal';
     if (r < helpChance) {
       type = 'help';
-    } else if (r < helpChance + 0.2) {
+    } else if (!isSlow && r < helpChance + 0.2) {
       type = 'obstacle';
     }
     
@@ -634,7 +635,7 @@ const Game: React.FC = () => {
             <ul style={{ lineHeight: '1.8', fontSize: '16px', paddingLeft: '20px', margin: 0 }}>
               <li style={{ marginBottom: '10px' }}><strong>博多水無月（三角形）</strong><br/>キャッチするとスコア+10。小豆、抹茶、甘夏が落ちてきます。</li>
               <li style={{ marginBottom: '10px' }}><strong>お邪魔アイテム（黒い星）</strong><br/>キャッチしてしまうとゲームオーバー！</li>
-              <li style={{ marginBottom: '10px' }}><strong>お茶（湯飲み茶碗）</strong><br/>お助けアイテム。ボーナス50点と、<strong>10秒間スローモーション</strong>になります！</li>
+              <li style={{ marginBottom: '10px' }}><strong>お茶（湯飲み茶碗）</strong><br/>お助けアイテム。ボーナス50点と、<strong>10秒間スローモーションになり、お邪魔アイテムが落ちてこなくなります！</strong></li>
               <li><strong>取り逃がし</strong><br/>博多水無月を画面外に落とすとゲームオーバーです（お邪魔は落としてOK）。</li>
             </ul>
             <div style={{ textAlign: 'center', marginTop: '20px', paddingBottom: '10px' }}>
